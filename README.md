@@ -1,71 +1,72 @@
-# ⚡ NovaWatt Analytics — plateforme décisionnelle d'un fournisseur d'électricité
+# NovaWatt Analytics
 
-> **Projet en construction (étape 1/6).** Le README final « recruteur » arrive à l'étape 6.
+Projet perso pour mon portfolio data. NovaWatt est un fournisseur d'électricité verte inventé, et
+l'idée est de lui construire un petit outil d'analyse pour répondre à une question simple :
+on gagne des clients, mais est-ce qu'on gagne vraiment de l'argent avec ?
 
-**NovaWatt** est un fournisseur d'électricité verte **fictif**. Ce projet construit sa plateforme
-analytique pour répondre à la question de sa direction :
+Au final je veux pouvoir suivre le chiffre d'affaires mensuel (MRR), la rétention par cohorte,
+le coût d'acquisition (CAC), le churn et la marge par client. La marge sera calculée avec le vrai
+prix et le vrai taux de CO₂ de l'électricité en France, heure par heure.
 
-> *« On gagne des clients, mais est-ce qu'on gagne de l'argent ? Quels clients acquérir,
-> lesquels perd-on, et pourquoi ? »*
+Le projet est en cours : pour l'instant seule la première étape (l'ingestion des données) est faite.
 
-Indicateurs : **MRR**, **cohortes de rétention**, **CAC**, **churn**, **LTV/CAC** et **marge par client**
-calculée à partir du coût et du contenu carbone **réels** de l'électricité, heure par heure.
+## Les données
 
-## Données
+- **RTE éCO2mix** (données réelles) : consommation en France, production par filière et taux de CO₂, toutes les 30 minutes.
+  [Lien vers le jeu de données](https://odre.opendatasoft.com/explore/dataset/eco2mix-national-cons-def/)
+- **Open-Meteo** (données réelles) : température moyenne par jour dans 8 grandes villes françaises.
+- **Données clients** (simulées) : clients, contrats, factures et dépenses marketing. Aucune
+  entreprise ne publie ce genre de données, donc je les génère moi-même. Elles dépendent quand même
+  des données réelles : par exemple un hiver froid fait monter les factures et les résiliations.
 
-| Source | Type | Contenu |
-|---|---|---|
-| [RTE éCO2mix](https://odre.opendatasoft.com/explore/dataset/eco2mix-national-cons-def/) | Réelle | Consommation France, production par filière, taux de CO₂ (pas de 30 min) |
-| [Open-Meteo](https://open-meteo.com/) | Réelle | Température moyenne journalière de 8 grandes villes |
-| Générateur Python (`generator/`) | Simulée | Clients, contrats, factures, dépenses marketing |
-
-Les données clients sont **simulées** : aucune entreprise ne publie ses données clients (RGPD).
-Le générateur est piloté par les données réelles (un hiver froid augmente les factures et les résiliations).
-
-## Architecture
+## Comment ça marche
 
 ```
-API RTE éCO2mix ─┐                                  ┌─ staging ─ intermediate ─ marts ─┐
-                 ├─► extract ─► landing (JSON) ─► DuckDB (raw) ─► dbt ─────────────────────► Streamlit
-API Open-Meteo ──┘                                  └──────── tests & documentation ───┘
-Générateur ─────────────────────────────────────────┘
+API RTE + API Open-Meteo  ->  fichiers JSON  ->  DuckDB  ->  dbt  ->  dashboard Streamlit
+Générateur de clients     ------------------->  DuckDB
 ```
 
-## Feuille de route
+Les réponses des API sont d'abord enregistrées telles quelles en JSON, ce qui permet de recharger
+la base sans tout retélécharger. Elles sont ensuite chargées dans DuckDB, puis transformées avec dbt.
 
-- [x] **1. Ingestion** RTE + météo → DuckDB, tests unitaires, CI
-- [ ] **2. Générateur** de clients, contrats, factures, marketing
-- [ ] **3. dbt staging** : sources, nettoyage, dictionnaire de données
-- [ ] **4. dbt marts** : MRR, cohortes, CAC, churn, marge (SQL avancé)
-- [ ] **5. Dashboard** Streamlit en ligne
-- [ ] **6. Note de synthèse** managériale + README final
+## Avancement
 
-## Lancer l'étape 1
+1. Ingestion des données RTE et météo dans DuckDB, avec tests et CI : **fait**
+2. Générateur de données clients : à faire
+3. Nettoyage des données avec dbt : à faire
+4. Calcul des indicateurs (MRR, cohortes, CAC, churn, marge) : à faire
+5. Dashboard Streamlit : à faire
+6. Note de synthèse : à faire
+
+## Lancer le projet
 
 ```bash
-cp .env.example .env              # Windows : copy .env.example .env
+cp .env.example .env          # sous Windows : copy .env.example .env
 python -m venv .venv
-source .venv/bin/activate         # Windows : .venv\Scripts\activate
+source .venv/bin/activate     # sous Windows : .venv\Scripts\activate
 pip install -r requirements.txt
 
-pytest -v                         # tests (API simulées)
-python -m ingestion.extract       # API -> data/landing/*.json
-python -m ingestion.load_raw      # JSON -> DuckDB (schéma raw) + contrôles qualité
+pytest -v                     # lance les tests
+python -m ingestion.extract   # télécharge les données des API
+python -m ingestion.load_raw  # charge les données dans DuckDB
 ```
 
-Explorer la base :
+Pour jeter un œil aux données chargées :
 
 ```bash
 python -c "import duckdb; print(duckdb.connect('data/novawatt.duckdb').sql('SELECT * FROM raw.eco2mix LIMIT 5'))"
 ```
 
-## Structure
+## Organisation du code
 
 ```
-ingestion/      extraction API + chargement DuckDB (étape 1)
-generator/      données clients simulées (étape 2)
-dbt_novawatt/   modélisation dbt (étapes 3-4)
-app/            dashboard Streamlit (étape 5)
-docs/           règles de gestion, dictionnaire, note de synthèse
-tests/          tests unitaires Python
+ingestion/      récupération des données et chargement dans DuckDB
+generator/      génération des données clients (étape 2)
+dbt_novawatt/   modèles dbt (étapes 3 et 4)
+app/            dashboard (étape 5)
+docs/           règles de calcul des indicateurs
+tests/          tests unitaires
 ```
+
+Les définitions des indicateurs (ce qu'on appelle un client actif, comment on compte le churn, etc.)
+sont dans [docs/regles_de_gestion.md](docs/regles_de_gestion.md).
